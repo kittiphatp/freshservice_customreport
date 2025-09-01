@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Report App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="ctn-header">
+        <div>
+            <h1 >Custom Report</h1>
+            <div class="dev-by">version: 1.0.0 | Dev by Kittiphat Pisuittiporn</div>
+        </div>
+        
+        <img src='/assets/mverge_logo.png' height="55px">
+    </div>
+
+    <div class="ctn-auth">
+
+        <div class="domain">
+            <label for="domain">Domain </label>
+            <input type="text" name="domain" id="domain" placeholder="Enter Domain">
+        </div>
+        <div class="authentication">
+            <label for="authToken">🔒Auth Token </label>
+            <input type="password" name="authToken" id="authToken" placeholder="Enter Auth Token">
+        </div>
+
+    </div>
+
+    <div class="ctn-controls">
+    
+        <div class="ticketType">
+            <label for="ticketType">Select Ticket Type</label>
+            <select id="ticketType" name="ticketType">
+                <option value="changes">Change Ticket</option>
+                <option value="tickets">SR/INC Ticket</option>
+            </select>
+        </div>
+
+        <div class="ticketId">
+            <label for="ticketId">Ticket ID </label>
+            <input type="number" name="ticketId" id="ticketId" placeholder="Enter Ticket ID">
+        </div>
+    </div>
+
+    <div class="ctn-attach">
+        <label for="fileInput" class="fileInput">📎แนบไฟล์ activity log สำหรับต่อท้ายรายงาน</label>
+        <div class="drop-zone" id="dropZone">
+           คลิกเพื่อเลือกไฟล์
+            <input type="file" id="fileInput" accept=".csv">
+        </div>
+        <div id="fileName"></div>
+        <button id="clearFile"> 🗑️ ล้างไฟล์</button>
+    </div>
+
+    <div class="ctn-action">
+        <button id="fetchReport">🔍 Search</button>
+        <button id="printReport">🖨️ Print</button>
+    </div>
+
+    <div class="ctn-report"></div>
+    <script src="app.js"></script>
+</body>
+</html>
