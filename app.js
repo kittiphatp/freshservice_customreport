@@ -1,6 +1,6 @@
 // เมื่อ refresh browser ให้เคลียร์ file input ออกไปด้วย
 window.addEventListener("load", () => {
-  const fileInput = document.querySelector("#fileInput");
+  const fileInput   = document.querySelector("#fileInput");
   const fileNameDiv = document.getElementById("fileName");
 
   fileInput.value = "";          // ล้าง input[type="file"]
@@ -34,12 +34,10 @@ btnFetchReport.addEventListener('click', async () => {
     ticketId === '' | null ? alert('กรุณาใส่เลข ticket id') : null
     const hasTicketId = ticketId !== '' | null
 
-
-
     if (hasTicketId) {
 
     // ส่วนของ ticket object
-    let   dataTicket    = await getTicketById(ticketType, ticketId, domain, requestOptions);
+    let   dataTicket = await getTicketById(ticketType, ticketId, domain, requestOptions);
     
     if (dataTicket !== null) {
       // Loading report 
@@ -55,7 +53,11 @@ btnFetchReport.addEventListener('click', async () => {
 
       const dataFormField = await getFormFields(ticketType, domain, requestOptions);
       // ส่วนของ Approval array
-      let   dataApprovals_arr = await getApprovalByTicketId(ticketType, ticketId, domain, requestOptions);
+      let dataApprovals_arr = await getApprovalByTicketId(ticketType, ticketId, domain, requestOptions);
+
+      // ส่วนของ Conversation array
+      let dataConversation_arr = await getConversionByTicketId(ticketId, domain, requestOptions);
+      
 
       // ส่วนของ Requested Item array (เฉพาะ service request)
       let dataRequestedItems_arr    = ticketSubType === "Service Request" ? await getRequestedItemsByTicketId(ticketId, domain, requestOptions) : []
@@ -225,7 +227,6 @@ btnFetchReport.addEventListener('click', async () => {
       console.log('ข้อมูล ticket', dataTicket)
 
 
-
       // loop หา value จาก id ของ approver array
       if (dataApprovals_arr !== null) {
         for (const [idx, i] of dataApprovals_arr.entries()) {
@@ -254,7 +255,56 @@ btnFetchReport.addEventListener('click', async () => {
       
       console.log('ข้อมูล approvals', dataApprovals_arr)
 
-      generateReport(ticketType, ticketSubType, dataTicket, dataApprovals_arr, dataRequestedItems_arr, dataServiceCatalog_arr, dataFileCSV_arr)
+
+
+
+      // loop หา value จาก id ของ conversation array
+      if (dataConversation_arr !== null) {
+        for (const [idx, i] of dataConversation_arr.entries()) {
+          const {
+            source,
+            created_at,
+            user_id
+          } = i
+      
+          // หา ชื่อนามสกุล และ email จาก user_id
+        const {first_name, last_name, primary_email} = await getRequesterById(user_id, domain, requestOptions)
+        const from_name = primary_email !== null ? first_name + ' ' + last_name : null
+
+        const sourceTypeMap = {
+            0: "email",
+            1: "form",
+            2: "note",
+            3: "status",
+            4: "meta",
+            5: "feedback",
+            6: "forward_email"
+          };
+
+          const source_value = source !== null ? sourceTypeMap[source] : null
+          const local_conversation_created_at = created_at !== null ? convertLocalFormat(created_at) : null
+
+          // เพิ่ม value เข้าแต่ละ conversation object ใน array
+          dataConversation_arr[idx]['from_name'] = from_name;
+          dataConversation_arr[idx]['primary_email'] = primary_email;
+          dataConversation_arr[idx]['source_value'] = source_value;
+          dataConversation_arr[idx]['local_conversation_created_at'] = local_conversation_created_at;
+        }
+      }
+      
+      console.log('ข้อมูล conversations', dataConversation_arr)
+
+      // สร้างรายงาน
+      generateReport(
+        ticketType, 
+        ticketSubType, 
+        dataTicket, 
+        dataApprovals_arr, 
+        dataConversation_arr, 
+        dataRequestedItems_arr, 
+        dataServiceCatalog_arr, 
+        dataFileCSV_arr
+      )
       }
     }
 })
@@ -332,6 +382,21 @@ async function getApprovalByTicketId(ticket_type, ticket_id, domain, requestOpti
   }
 }
 
+// API GET CONVERSATION (COMMENT) DETAIL
+async function getConversionByTicketId(ticket_id, domain, requestOptions) {
+  const URL_GETCONVERSACTION = `https://${domain}.freshservice.com/api/v2/tickets/${ticket_id}/conversations`
+
+  try {
+    const response = await fetch(URL_GETCONVERSACTION, requestOptions);
+    const result   = await response.json();
+    const dataObj  = await result.conversations;
+    return dataObj;
+  } catch (e) {
+    // alert(`ไม่พบข้อมูล conversion`)
+    return null
+  }
+}
+
 // API GET REQUESTER DETAIL
 async function getRequesterById(requester_id, domain, requestOptions) {
   const URL_GETREQUESTER = `https://${domain}.freshservice.com/api/v2/requesters/${requester_id}`
@@ -387,6 +452,7 @@ async function getGroupById(group_id, domain, requestOptions) {
     alert(`ไม่พบข้อมูล group id ${group_id}`)
   }
 }
+
 
 // API GET REQUESTED ITEMS DETAIL
 async function getRequestedItemsByTicketId(ticket_id, domain, requestOptions) {
@@ -484,7 +550,16 @@ function loadingReport() {
 }
 
 // GENERATE CUSTOM REPORT
-async function generateReport(ticket_type, ticket_subtype, data_ticket, data_approval_arr, data_requesteditems_arr, data_servicecatalog_arr, data_activitylog_arr) {
+async function generateReport(
+  ticket_type, 
+  ticket_subtype, 
+  data_ticket, 
+  data_approval_arr,
+  data_conversation_arr,
+  data_requesteditems_arr, 
+  data_servicecatalog_arr, 
+  data_activitylog_arr
+) {
     let report = document.querySelector('.ctn-report')
 
     // activity log จากไฟล์แนบ
@@ -495,9 +570,74 @@ async function generateReport(ticket_type, ticket_subtype, data_ticket, data_app
       activitylog_html += csvJsonToTable(data_activitylog_arr)
     }
 
+    // ส่วนของ approval array
+    let approvallog_html = ''
+
+    if (data_approval_arr !== null) {
+    
+      approvallog_html += `
+        <div class='saparate-line'></div>
+        <h3>APPROVAL LOGS</h3>
+      `
+      data_approval_arr.forEach((i, idx) => {
+        const {
+          approval_type_value,
+          approver_name,
+          approval_status,
+          local_approval_updated_at,
+          latest_remark
+        } = i
+
+        const approval_status_name = approval_status.name === 'peer_responded' ? `Already approved by ${data_approval_arr[idx - 1].approver_name}` : approval_status.name
+        const approver_status_propercase = toProperCase(approval_status_name)
+
+        
+        approvallog_html += `<div class='item-topic'>${approval_type_value}</div>`
+        approvallog_html += `
+          <div class='ap-grid'>
+            <div>${approver_name}</div>
+              <div>
+                <div>${approver_status_propercase} on ${local_approval_updated_at}</div>
+                <div>${latest_remark}</div>
+              </div>
+            </div>
+          </div>
+        `
+      })
+    }
+
+
+    // ส่วนของ conversaton array
+    let conversation_html = ''
+
+    if (data_conversation_arr !== null) {
+    
+      conversation_html += `
+        <div class='saparate-line'></div>
+        <h3>COMMENTS</h3>
+      `
+      for (let idx = data_conversation_arr.length - 1; idx >= 0; idx--) {
+        const {
+          from_email,
+          from_name,
+          primary_email,
+          incoming,
+          source_value,
+          local_conversation_created_at,
+          body
+        } = data_conversation_arr[idx]        
+
+        conversation_html += `
+          <div>From <b>${from_name}</b> (${primary_email}) on <b>${local_conversation_created_at} as ${incoming ? 'Inbound': 'Outbound'} ${source_value}</b></div>
+          ${body}
+        `
+      }
+
+    }
+    
     // report สำหรับ tickets
     if (ticket_type === 'tickets') {
-
+      
       // ส่วนของ ticket
       let {
           subject,
@@ -529,39 +669,7 @@ async function generateReport(ticket_type, ticket_subtype, data_ticket, data_app
       // custom fields
       let {
         ["contract_no."]: contract_no
-      } = custom_fields_value
-
-
-
-      // ส่วนของ approval array
-      let approvallog_html = ''
-      if (data_approval_arr !== null) {
-        data_approval_arr.forEach((i, idx) => {
-          const {
-            approval_type_value,
-            approver_name,
-            approval_status,
-            local_approval_updated_at,
-            latest_remark
-          } = i
-
-          const approval_status_name = approval_status.name === 'peer_responded' ? `Already approved by ${data_approval_arr[idx - 1].approver_name}` : approval_status.name
-          const approver_status_propercase = toProperCase(approval_status_name)
-
-          approvallog_html += `<div class='item-topic'>${approval_type_value}</div>`
-          approvallog_html += `
-            <div class='ap-grid'>
-              <div>${approver_name}</div>
-                <div>
-                  <div>${approver_status_propercase} on ${local_approval_updated_at}</div>
-                  <div>${latest_remark}</div>
-                </div>
-              </div>
-            </div>
-          `
-        })
-      }
-
+      } = custom_fields_value;
 
       // ส่วนของ service items (กรณีที่เป็น service request)
       const number_items = data_requesteditems_arr.length
@@ -743,22 +851,30 @@ async function generateReport(ticket_type, ticket_subtype, data_ticket, data_app
           <h3>DESCRIPTION</h3>
           <div>${description}</div>
 
-          <div class='saparate-line'></div>
+          
 
           ${
             ticket_subtype === "Service Request"
             ? `
-              <h3>REQUESTED ITEMS (${number_items})</h3>
-              ${serviceitems_html}
-
               <div class='saparate-line'></div>
+              <h3>REQUESTED ITEMS (${number_items})</h3>
+              ${serviceitems_html}              
               `
             : ''
           }
 
-          <h3>RESOLUTION NOTE</h3>
-
-          ${resolution_notes_html || ''}
+          
+          ${approvallog_html || ''}
+          
+         
+          ${`
+            <div class='saparate-line'></div>
+            <h3>RESOLUTION NOTE</h3> 
+            ${resolution_notes_html || ''}
+          `
+          }
+          
+          ${conversation_html}
 
           ${activitylog_html}
       `
@@ -810,35 +926,7 @@ async function generateReport(ticket_type, ticket_subtype, data_ticket, data_app
         change_impact,
         reason_for_change,
         rollout_plan
-      } = planning_fields
-
-
-      // ส่วนของ approval array
-      let approvallog_html = ''
-      data_approval_arr.forEach((i, idx) => {
-        const {
-          approval_type_value,
-          approver_name,
-          approval_status,
-          local_approval_updated_at,
-          latest_remark
-        } = i
-
-        const approval_status_name = approval_status.name === 'peer_responded' ? `Already approved by ${data_approval_arr[idx - 1].approver_name}` : approval_status.name
-        const approver_status_propercase = toProperCase(approval_status_name)
-
-        approvallog_html += `<div class='item-topic'>${approval_type_value}</div>`
-        approvallog_html += `
-          <div class='ap-grid'>
-            <div>${approver_name}</div>
-              <div>
-                <div>${approver_status_propercase} on ${local_approval_updated_at}</div>
-                <div>${latest_remark}</div>
-              </div>
-            </div>
-          </div>
-        `
-      })
+      } = planning_fields;
 
       report.innerHTML = `
           <h3>${subject}     <span>#CHN-${id}</span></h3>
@@ -969,11 +1057,7 @@ async function generateReport(ticket_type, ticket_subtype, data_ticket, data_app
               <div class='item-value'>${backout_plan?.description_html || '--'}</div>
             </div>
 
-          </div>
-
-          <div class='saparate-line'></div>
-
-          <h3>APPROVAL LOGS</h3>
+          </div>          
 
           ${approvallog_html}
 
