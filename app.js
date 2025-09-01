@@ -52,6 +52,7 @@ btnFetchReport.addEventListener('click', async () => {
       }  
 
       const dataFormField = await getFormFields(ticketType, domain, requestOptions);
+
       // ส่วนของ Approval array
       let dataApprovals_arr = await getApprovalByTicketId(ticketType, ticketId, domain, requestOptions);
 
@@ -131,33 +132,48 @@ btnFetchReport.addEventListener('click', async () => {
       let customfields_value_trans_arr = [];
       let custom_fields_value          = {};
 
+      
 
       for (const [idx, i] of customfields_keys_arr.entries()) {
-          let {label, field_type} = dataFormField.find(item => item.name === i)
-          customfields_name_arr.push(label)
-          customfields_type_arr.push(field_type)
+        
+          // let {label, field_type} = dataFormField.find(item => item.name === i)
+          // customfields_name_arr.push(label)
+          // customfields_type_arr.push(field_type)
 
-          if (field_type === "custom_lookup") {
+          let found = dataFormField.find(item => item.name === i)
+
+          if (found) {
+            let { label, field_type } = found
+            customfields_name_arr.push(label)
+            customfields_type_arr.push(field_type)
+
+            if (field_type === "custom_lookup") {
               // customfields_value_trans_arr.push('ต้องเอา user id ไปหา =="')
               const customfield_requester_id    = customfields_values_arr[idx]
               const customfield_requester       = customfield_requester_id !== null ? await getRequesterById(customfield_requester_id, domain, requestOptions)                : null
               const customfield_requester_value = customfield_requester_id !== null ? await customfield_requester.first_name + " " + customfield_requester.last_name  : null
               customfields_value_trans_arr.push(customfield_requester_value)
-          } else if (field_type === "custom_date") {
-              const rawDate = customfields_values_arr[idx]
-              const localDate = new Date(rawDate).toLocaleString("en-US", {
-                timeZone: "Asia/Bangkok", // GMT+7
-                weekday:  "short",
-                day:      "2-digit",
-                month:    "short",
-                hour:     "numeric",
-                minute:   "2-digit",
-                hour12:   true,
-              })
-              customfields_value_trans_arr.push(localDate)
-          } else {
-              customfields_value_trans_arr.push(customfields_values_arr[idx])
+            } else if (field_type === "custom_date") {
+                const rawDate = customfields_values_arr[idx]
+                const localDate = new Date(rawDate).toLocaleString("en-US", {
+                  timeZone: "Asia/Bangkok", // GMT+7
+                  weekday:  "short",
+                  day:      "2-digit",
+                  month:    "short",
+                  hour:     "numeric",
+                  minute:   "2-digit",
+                  hour12:   true,
+                })
+                customfields_value_trans_arr.push(localDate)
+            } else {
+                customfields_value_trans_arr.push(customfields_values_arr[idx])
+            }
+
+          }  else {
+            console.warn(`No match found for name = ${i}`)
           }
+
+          
       }
 
       customfields_name_arr.forEach((i, idx) => {
@@ -610,7 +626,7 @@ async function generateReport(
     // ส่วนของ conversaton array
     let conversation_html = ''
 
-    if (data_conversation_arr !== null) {
+    if (data_conversation_arr.length > 0) {
     
       conversation_html += `
         <div class='saparate-line'></div>
