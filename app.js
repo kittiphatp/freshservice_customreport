@@ -57,7 +57,7 @@ btnFetchReport.addEventListener('click', async () => {
       let dataApprovals_arr = await getApprovalByTicketId(ticketType, ticketId, domain, requestOptions);
 
       // ส่วนของ Conversation array
-      let dataConversation_arr = await getConversionByTicketId(ticketId, domain, requestOptions);
+      let dataConversation_arr = await getConversionByTicketId(ticketId, domain, requestOptions) !== null ? await getConversionByTicketId(ticketId, domain, requestOptions): [];
       
 
       // ส่วนของ Requested Item array (เฉพาะ service request)
@@ -114,13 +114,11 @@ btnFetchReport.addEventListener('click', async () => {
 
 
 
-      const dataRequester         = requester_id                       !== null ? await getRequesterById(requester_id, domain, requestOptions)                       : null
-      const dataAgent             = agent_id                           !== null ? await getAgentById(agent_id, domain, requestOptions)                               : null
-      const dataReportingManager  = dataRequester.reporting_manager_id !== null ? await getRequesterById(dataRequester.reporting_manager_id, domain, requestOptions) : null
-      const dataDepartment        = department_id                      !== null ? await getDepartmentById(department_id, domain, requestOptions)                     : null
-      const dataGroup             = group_id                           !== null ? await getGroupById(group_id, domain, requestOptions)                               : null
-
-      
+      const dataRequester         = requester_id                       !== null ? await getRequesterById(requester_id, domain, requestOptions)                       : null;
+      const dataAgent             = agent_id                           !== null ? await getAgentById(agent_id, domain, requestOptions)                               : null;
+      const dataReportingManager  = dataRequester.reporting_manager_id !== null ? await getRequesterById(dataRequester.reporting_manager_id, domain, requestOptions) : null;
+      const dataDepartment        = department_id                      !== null ? await getDepartmentById(department_id, domain, requestOptions)                     : null;
+      const dataGroup             = group_id                           !== null ? await getGroupById(group_id, domain, requestOptions)                               : null;
 
 
       // จัดการ custom fields
@@ -130,27 +128,25 @@ btnFetchReport.addEventListener('click', async () => {
       let customfields_name_arr        = [];
       let customfields_type_arr        = [];
       let customfields_value_trans_arr = [];
-      let custom_fields_value          = {};
+      let custom_fields_value          = [];
 
-      
+      // console.log(dataFormField)
 
       for (const [idx, i] of customfields_keys_arr.entries()) {
-        
-          // let {label, field_type} = dataFormField.find(item => item.name === i)
-          // customfields_name_arr.push(label)
-          // customfields_type_arr.push(field_type)
 
-          let found = dataFormField.find(item => item.name === i)
+          let found = dataFormField.find(item => item.name === i);
 
           if (found) {
+
             let { label, field_type } = found
-            customfields_name_arr.push(label)
-            customfields_type_arr.push(field_type)
+
+            customfields_name_arr .push(label)
+            customfields_type_arr .push(field_type)
 
             if (field_type === "custom_lookup") {
               // customfields_value_trans_arr.push('ต้องเอา user id ไปหา =="')
               const customfield_requester_id    = customfields_values_arr[idx]
-              const customfield_requester       = customfield_requester_id !== null ? await getRequesterById(customfield_requester_id, domain, requestOptions)                : null
+              const customfield_requester       = customfield_requester_id !== null ? await getRequesterById(customfield_requester_id, domain, requestOptions)        : null
               const customfield_requester_value = customfield_requester_id !== null ? await customfield_requester.first_name + " " + customfield_requester.last_name  : null
               customfields_value_trans_arr.push(customfield_requester_value)
             } else if (field_type === "custom_date") {
@@ -173,15 +169,24 @@ btnFetchReport.addEventListener('click', async () => {
             console.warn(`No match found for name = ${i}`)
           }
 
-          
       }
 
       customfields_name_arr.forEach((i, idx) => {
+          const object_name = customfields_name_arr[idx]
+          const object_value = customfields_value_trans_arr[idx]
+
           if (customfields_type_arr[idx] === "custom_date") {
-            const add_local_name = "local_" + i.toLowerCase().replace(/\s+/g, "_")
-            custom_fields_value[add_local_name] = customfields_value_trans_arr[idx]
+            
+            custom_fields_value.push({[object_name]: object_value})
+            // custom_fields_value[i] = customfields_value_trans_arr[idx]
+            // สำหรับปรับชื่อ key ด้วย underscore และปรับเป็นตัวเล็ก และนำหน้าด้วย local_
+            // const add_local_name = "local_" + i.toLowerCase().replace(/\s+/g, "_") 
+            // custom_fields_value[add_local_name] = customfields_value_trans_arr[idx]
           } else {
-            custom_fields_value[i.toLowerCase().replace(/\s+/g, "_")] = customfields_value_trans_arr[idx]
+            custom_fields_value.push({[object_name]: object_value})
+            // custom_fields_value[i] = customfields_value_trans_arr[idx]
+            // สำหรับปรับชื่อ key ด้วย underscore และปรับเป็นตัวเล็ก
+            // custom_fields_value[i.toLowerCase().replace(/\s+/g, "_")] = customfields_value_trans_arr[idx] 
           }
       })
 
@@ -275,7 +280,7 @@ btnFetchReport.addEventListener('click', async () => {
 
 
       // loop หา value จาก id ของ conversation array
-      if (dataConversation_arr !== null) {
+      if (dataConversation_arr.length > 0) {
         for (const [idx, i] of dataConversation_arr.entries()) {
           const {
             source,
@@ -586,6 +591,23 @@ async function generateReport(
       activitylog_html += csvJsonToTable(data_activitylog_arr)
     }
 
+    // ส่วน custom fields (array) ซึ่งเป็นส่วนย่อยข้างในของ ticket properties
+      const custom_fields_value  = data_ticket.custom_fields_value
+      let customfields_html = ''
+      if (custom_fields_value.length > 0) {
+        custom_fields_value.forEach((obj) => {
+        const key = Object.keys(obj)[0]     // ดึง key
+        const value = obj[key]              // ดึง value ตาม key นั้น
+
+        customfields_html += `
+          <div class='tp-grid-item'>
+            <div class='item-topic'>${key}</div>
+            <div class='item-value'>${value || '--'}</div>
+          </div>
+        `
+        })
+      }
+
     // ส่วนของ approval array
     let approvallog_html = ''
 
@@ -675,21 +697,16 @@ async function generateReport(
           local_planned_end_date,
           department_value,
           planned_effort,
-          custom_fields_value,
+          custom_fields_value, // เป็น array
           description,
           local_due_by,
           //tags ไม่รู้หาจากไหน
           resolution_notes_html
-      } = data_ticket
-
-      // custom fields
-      let {
-        ["contract_no."]: contract_no
-      } = custom_fields_value;
+      } = data_ticket;
 
       // ส่วนของ service items (กรณีที่เป็น service request)
       const number_items = data_requesteditems_arr.length
-      let customfields_html     = ''
+      let serviceitems_customfields_html = ''
       let additional_notes_html = ''
       let serviceitems_html     = ''
 
@@ -731,7 +748,7 @@ async function generateReport(
 
             // console.log(name_index)
 
-            customfields_html += `
+            serviceitems_customfields_html += `
               <div class='si-grid-item'>
                 <div class='item-topic'>${custom_fields_label}</div>
                 <div class='item-value'>${i}</div>
@@ -765,7 +782,7 @@ async function generateReport(
                 <div class='item-value'>${stage_value}</div>
               </div>
 
-              ${customfields_html}
+              ${serviceitems_customfields_html}
 
               ${additional_notes_html}
 
@@ -845,15 +862,8 @@ async function generateReport(
               <div class='item-topic'>Planned Effort</div>
               <div class='item-value'>${planned_effort || '--'}</div>
             </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>Contract No.</div>
-              <div class='item-value'>${contract_no || '--'}</div>
-            </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>Tags</div>
-              <div class='item-value'>${'--'}</div>
-            </div>
 
+            ${customfields_html}
             
             <div class='tp-grid-item'>
               <div class='item-topic'>Due by</div>
@@ -925,16 +935,7 @@ async function generateReport(
           custom_fields_value,
           description,
           planning_fields
-      } = data_ticket
-
-      // custom fields
-      let {
-        local_uat_start_date_, 
-        local_deployment_start_date,
-        รหัสโปรแกรมที่เกี่ยวข้อง,
-        user_ผู้ประสานงาน,
-        it_ผู้ประสานงาน
-      } = custom_fields_value
+      } = data_ticket;
 
       // planning fields
       let {
@@ -1019,29 +1020,11 @@ async function generateReport(
               <div class='item-topic'>Planned Effort</div>
               <div class='item-value'>${planned_effort || '--'}</div>
             </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>UAT Start Date</div>
-              <div class='item-value'>${local_uat_start_date_ || '--'}</div>
-            </div>
-
             
-            <div class='tp-grid-item'>
-              <div class='item-topic'>Deployment Start Date</div>
-              <div class='item-value'>${local_deployment_start_date || '--'}</div>
+            ${customfields_html}
+
             </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>รหัสโปรแกรมที่เกี่ยวข้อง</div>
-              <div class='item-value'>${รหัสโปรแกรมที่เกี่ยวข้อง || '--'}</div>
-            </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>User ผู้ประสานงาน</div>
-              <div class='item-value'>${user_ผู้ประสานงาน || '--'}</div>
-            </div>
-            <div class='tp-grid-item'>
-              <div class='item-topic'>IT ผู้ประสานงาน</div>
-              <div class='item-value'>${it_ผู้ประสานงาน || '--'}</div>
-            </div>
-          </div>
+          
 
           <div class='saparate-line'></div>
           

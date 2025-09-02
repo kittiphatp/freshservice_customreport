@@ -25,6 +25,7 @@
     border-radius: 5px;
     display: flex;
     align-items: center;
+    /* display: none; */
 }
 
 .domain > *, 
